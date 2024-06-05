@@ -1,0 +1,70 @@
+import discord
+from discord.ext import commands
+import random
+import requests
+
+TOKEN = 'Discord-Bot-Token'
+LOVENSE_TOKEN = 'Lovense-Token'
+
+intents = discord.Intents.default()
+bot = commands.Bot(command_prefix='!', intents=intents)
+
+connected_toys = {}
+
+class RPSButton(discord.ui.Button):
+    def __init__(self, label):
+        super().__init__(label=label, style=discord.ButtonStyle.primary)
+
+    async def callback(self, interaction: discord.Interaction):
+        user_choice = self.label
+        bot_choice = random.choice(["Rock", "Paper", "Scissors"])
+
+        result = determine_winner(user_choice, bot_choice)
+        response = f"You chose {user_choice}, I chose {bot_choice}. {result}"
+
+        await interaction.response.send_message(response)
+
+        if "lose" in result:
+            if interaction.user.id in connected_toys:
+                vibrate_toy(connected_toys[interaction.user.id])
+
+class RPSView(discord.ui.View):
+    def __init__(self):
+        super().__init__()
+        self.add_item(RPSButton(label="Rock"))
+        self.add_item(RPSButton(label="Paper"))
+        self.add_item(RPSButton(label="Scissors"))
+
+@bot.event
+async def on_ready():
+    print(f'Bot is ready as {bot.user}')
+
+@bot.command()
+async def rps(ctx):
+    await ctx.send("Choose your move!", view=RPSView())
+
+@bot.command()
+async def register_toy(ctx, toy_id: str):
+    connected_toys[ctx.author.id] = toy_id
+    await ctx.send(f'Toy with ID {toy_id} registered successfully!')
+
+def determine_winner(user_choice, bot_choice):
+    if user_choice == bot_choice:
+        return "It's a draw!"
+    elif (user_choice == "Rock" and bot_choice == "Scissors") or \
+         (user_choice == "Paper" and bot_choice == "Rock") or \
+         (user_choice == "Scissors" and bot_choice == "Paper"):
+        return "You win!"
+    else:
+        return "You lose!"
+
+def vibrate_toy(toy_id):
+    url = f'https://api.lovense.com/api/lan/v2/toy/command'
+    data = {
+        'token': LOVENSE_TOKEN,
+        'toy': toy_id,
+        'command': 'vibrate:v20'
+    }
+    requests.post(url, data=data)
+
+bot.run(TOKEN)
